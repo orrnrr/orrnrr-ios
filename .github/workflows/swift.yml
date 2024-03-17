@@ -5,18 +5,69 @@ name: Swift
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "feature/*" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "develop" ]
+    paths:
+      - '.swiftlint.yml'
+      - '**/*.swift'
 
 jobs:
+
+  # Lint
+  SwiftLint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: GitHub Action for SwiftLint
+        uses: norio-nomura/action-swiftlint@3.2.1
+      - name: GitHub Action for SwiftLint with --strict
+        uses: norio-nomura/action-swiftlint@3.2.1
+        with:
+          args: --strict
+      - name: GitHub Action for SwiftLint (Only files changed in the PR)
+        uses: norio-nomura/action-swiftlint@3.2.1
+        env:
+          DIFF_BASE: ${{ github.base_ref }}
+      - name: GitHub Action for SwiftLint (Different working directory)
+        uses: norio-nomura/action-swiftlint@3.2.1
+        env:
+          WORKING_DIRECTORY: Source
+          
+      - name: send slack message
+        uses: 8398a7/action-slack@v3
+        with:
+          mention: 'Lint error'
+          if_mention: failure
+          status: ${{ job.status }}
+          fields: workflow,job,commit,message,ref,author,took
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        if: always()
+
+
+  # Build
   build:
 
     runs-on: macos-latest
 
     steps:
     - uses: actions/checkout@v3
-    - name: Build
-      run: swift build -v
-    - name: Run tests
-      run: swift test -v
+    - name: Build Xcode
+      run: |
+        xcodebuild clean test -project orrnrr/orrnrr.xcodeproj \
+        -scheme orrnrr \
+        -destination 'platform=iOS Simulator,name=iPhone 13,OS=latest'
+        
+    - name: send slack message
+      uses: 8398a7/action-slack@v3
+      with:
+        mention: 'build fail'
+        if_mention: failure
+        status: ${{ job.status }}
+        fields: workflow,job,commit,message,ref,author,took
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      if: always()
+        
+
